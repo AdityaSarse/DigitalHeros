@@ -25,12 +25,20 @@ app.use("/api/draws", drawRoutes);
 app.use("/api/winners", winnerRoutes);
 app.use("/api/admin", adminRoutes);
 
+// Root diagnostic route
+app.get("/", (req, res) => {
+  res.json({
+    success: true,
+    message: "Digital Heroes Backend is running",
+  });
+});
+
 // Health check
 app.get("/api/health", (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Digital Heroes API is running",
-    });
+  res.status(200).json({
+    success: true,
+    message: "Digital Heroes API is running",
+  });
 });
 
 // Global error handler
