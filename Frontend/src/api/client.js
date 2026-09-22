@@ -11,22 +11,23 @@ const api = axios.create({
   },
 });
 
-// Synchronously attach token from localStorage, fallback to Supabase session
+// Attach active Supabase session token or stored localStorage token
 api.interceptors.request.use(async (config) => {
   try {
-    let token = localStorage.getItem('token');
-    if (!token) {
-      const { data: { session } } = await supabase.auth.getSession();
-      token = session?.access_token;
-      if (token) {
-        localStorage.setItem('token', token);
-      }
+    let token = null;
+    const { data } = await supabase.auth.getSession();
+    if (data?.session?.access_token) {
+      token = data.session.access_token;
+      localStorage.setItem('token', token);
+    } else {
+      token = localStorage.getItem('token');
     }
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
   } catch (err) {
-    console.error('Error attaching auth token:', err);
+    console.error('Error attaching auth token to request:', err);
   }
   return config;
 }, (error) => {

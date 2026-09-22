@@ -9,11 +9,20 @@ import {
 // ─── ADMIN: POST /api/draws & POST /api/admin/draws ──────────────────────────
 
 export const createDraw = async (req, res) => {
+    const requestPath = `${req.method} ${req.originalUrl || req.url}`;
     try {
         const { draw_month, prize_pool_amount, jackpot_amount, algorithm } = req.body;
 
-        // Validate draw_month (must be non-empty string in valid date format)
+        console.log(`[CreateDraw] ${requestPath} - Received payload:`, {
+            draw_month,
+            prize_pool_amount,
+            jackpot_amount,
+            algorithm,
+        });
+
+        // 1. Validate draw_month (must be non-empty string in valid date format)
         if (!draw_month || typeof draw_month !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(draw_month.trim())) {
+            console.warn(`[CreateDraw] ${requestPath} - 400 Bad Request: Invalid or missing draw_month ("${draw_month}")`);
             return res.status(400).json({
                 success: false,
                 error: "Bad Request",
@@ -21,9 +30,10 @@ export const createDraw = async (req, res) => {
             });
         }
 
-        // Validate prize_pool_amount (must be valid positive number)
+        // 2. Validate prize_pool_amount (must be valid positive number)
         const prizePoolNum = Number(prize_pool_amount);
         if (prize_pool_amount === undefined || prize_pool_amount === null || isNaN(prizePoolNum) || prizePoolNum <= 0) {
+            console.warn(`[CreateDraw] ${requestPath} - 400 Bad Request: Invalid prize_pool_amount ("${prize_pool_amount}")`);
             return res.status(400).json({
                 success: false,
                 error: "Bad Request",
@@ -31,11 +41,12 @@ export const createDraw = async (req, res) => {
             });
         }
 
-        // Validate jackpot_amount if provided
+        // 3. Validate jackpot_amount if provided
         let jackpotNum = 0;
         if (jackpot_amount !== undefined && jackpot_amount !== null && jackpot_amount !== "") {
             jackpotNum = Number(jackpot_amount);
             if (isNaN(jackpotNum) || jackpotNum < 0) {
+                console.warn(`[CreateDraw] ${requestPath} - 400 Bad Request: Invalid jackpot_amount ("${jackpot_amount}")`);
                 return res.status(400).json({
                     success: false,
                     error: "Bad Request",
@@ -47,7 +58,8 @@ export const createDraw = async (req, res) => {
         const validAlgorithms = ["RANDOM", "ALGORITHMIC"];
         const resolvedAlgorithm = algorithm && validAlgorithms.includes(algorithm) ? algorithm : "RANDOM";
 
-        // Prevent duplicate draw for the same month
+        // 4. Prevent duplicate draw for the same month
+        console.log(`[CreateDraw] ${requestPath} - Checking for existing draw in month "${draw_month.trim()}"...`);
         const { data: existing, error: existingErr } = await supabaseAdmin
             .from("draws")
             .select("id")
@@ -55,6 +67,7 @@ export const createDraw = async (req, res) => {
             .maybeSingle();
 
         if (existingErr) {
+            console.error(`[CreateDraw] ${requestPath} - 500 Error checking existing draw:`, existingErr.message);
             return res.status(500).json({
                 success: false,
                 error: "Database Error",
@@ -63,6 +76,7 @@ export const createDraw = async (req, res) => {
         }
 
         if (existing) {
+            console.warn(`[CreateDraw] ${requestPath} - 409 Conflict: Draw already exists for ${draw_month}`);
             return res.status(409).json({
                 success: false,
                 error: "Conflict",
@@ -70,7 +84,8 @@ export const createDraw = async (req, res) => {
             });
         }
 
-        // Server-side Supabase client configured with SUPABASE_SERVICE_ROLE_KEY bypasses RLS
+        // 5. Insert using server-side Supabase client (configured with SUPABASE_SERVICE_ROLE_KEY to bypass RLS)
+        console.log(`[CreateDraw] ${requestPath} - Executing Supabase INSERT into "draws" table using supabaseAdmin...`);
         const { data, error } = await supabaseAdmin
             .from("draws")
             .insert({
@@ -84,6 +99,12 @@ export const createDraw = async (req, res) => {
             .single();
 
         if (error) {
+            console.error(`[CreateDraw] ${requestPath} - 500 Supabase INSERT failed:`, {
+                message: error.message,
+                code: error.code,
+                details: error.details,
+                hint: error.hint,
+            });
             return res.status(500).json({
                 success: false,
                 error: "Database Error",
@@ -91,6 +112,7 @@ export const createDraw = async (req, res) => {
             });
         }
 
+        console.log(`[CreateDraw] ${requestPath} - 201 Created: Successfully inserted draw with id: ${data.id}`);
         return res.status(201).json({
             success: true,
             message: "Draw created successfully.",
@@ -98,6 +120,7 @@ export const createDraw = async (req, res) => {
             ...data,
         });
     } catch (err) {
+        console.error(`[CreateDraw] ${requestPath} - 500 Uncaught Exception:`, err.message);
         return res.status(500).json({
             success: false,
             error: "Internal Server Error",
