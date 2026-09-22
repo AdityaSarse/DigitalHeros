@@ -1,4 +1,18 @@
+import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "../config/supabase.js";
+
+// Dedicated client for user password sign-in to prevent mutating supabaseAdmin session
+const getAuthClient = () =>
+    createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
+        {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false,
+            },
+        }
+    );
 
 // ─── POST /api/auth/register ────────────────────────────────────────────────
 
@@ -51,7 +65,8 @@ export const login = async (req, res) => {
         });
     }
 
-    const { data, error } = await supabaseAdmin.auth.signInWithPassword({
+    const authClient = getAuthClient();
+    const { data, error } = await authClient.auth.signInWithPassword({
         email,
         password,
     });

@@ -1,51 +1,36 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw new Error("Missing Supabase environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be defined in Backend/.env");
+// Safe startup check: confirms the service-role environment variable exists, but NEVER logs its value
+if (!SUPABASE_URL) {
+    console.error("[Supabase Config Error] Missing SUPABASE_URL environment variable.");
 }
 
-/**
- * Inspect the JWT role safely without external libraries
- */
-export function getJwtRole(jwt) {
+if (!SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("[Supabase Config Error] Missing SUPABASE_SERVICE_ROLE_KEY environment variable. Draws creation will fail RLS!");
+} else {
+    console.log("[Supabase Config] SUPABASE_SERVICE_ROLE_KEY is present and configured.");
     try {
-        if (!jwt || typeof jwt !== "string") return null;
-        const parts = jwt.split(".");
+        const parts = SUPABASE_SERVICE_ROLE_KEY.split(".");
         if (parts.length === 3) {
             const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
-            return payload.role || null;
+            if (payload.role !== "service_role") {
+                console.warn(`[Supabase Config Warning] SUPABASE_SERVICE_ROLE_KEY has role "${payload.role}", NOT "service_role"! This will cause RLS violations.`);
+            } else {
+                console.log(`[Supabase Config] Verified SUPABASE_SERVICE_ROLE_KEY has role "service_role".`);
+            }
         }
     } catch {
-        return null;
+        // Safe check without logging secret
     }
-    return null;
 }
 
-const keyRole = getJwtRole(supabaseServiceRoleKey);
-
-if (keyRole === "anon") {
-    console.error(`
-================================================================================
-CRITICAL MISCONFIGURATION DETECTED:
-SUPABASE_SERVICE_ROLE_KEY is set to the Supabase ANON key (role: "anon")!
-This will trigger "new row violates row-level security policy for table draws"
-whenever an admin attempts to insert a draw.
-Please set SUPABASE_SERVICE_ROLE_KEY in your Render environment settings to the
-actual service_role secret from Supabase Dashboard > Project Settings > API.
-================================================================================
-    `);
-} else if (keyRole === "service_role") {
-    console.log(`[Supabase Config] Initialized supabaseAdmin with verified service_role key (bypasses RLS)`);
-} else {
-    console.log(`[Supabase Config] Initialized supabaseAdmin. Key role: ${keyRole || "custom/opaque"}`);
-}
-
+// Server-side admin client using service_role key to bypass RLS
 export const supabaseAdmin = createClient(
-    supabaseUrl,
-    supabaseServiceRoleKey,
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
     {
         auth: {
             autoRefreshToken: false,
