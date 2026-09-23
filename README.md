@@ -9,7 +9,6 @@ Digital Heroes is a modern full-stack golf platform designed around golf score t
 The project combines a premium editorial-style interface with a functional backend, authentication, role-based access, PostgreSQL data management, and production deployment.
 
 ---
-
 ## 🌐 Live Demo
 
 **Live Application:**  
